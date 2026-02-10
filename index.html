@@ -1,1 +1,238 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alkohol-omregner</title>
 
+<link rel="manifest" href="manifest.json">
+
+<style>
+:root{
+  --bg:#0b0b0b;
+  --card:#1e1e1e;
+  --accent:#f1c40f;
+  --text:#fff;
+  --muted:#aaa;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:radial-gradient(1000px 500px at top,#1a1a1a,transparent),var(--bg);
+  color:var(--text);
+  padding:24px;
+  min-height:100vh;
+}
+h1{text-align:center;font-size:30px;font-weight:800;margin-bottom:24px}
+.section{
+  max-width:420px;
+  margin:0 auto;
+  background:var(--card);
+  border-radius:22px;
+  padding:24px;
+  box-shadow:0 12px 30px rgba(0,0,0,.6);
+}
+.step{display:none}
+.step.active{display:block}
+button,input{
+  width:100%;
+  padding:18px;
+  font-size:18px;
+  border:none;
+  border-radius:16px;
+}
+input{background:#f5f5f5;color:#000;margin-top:10px}
+button{
+  margin-top:18px;
+  background:linear-gradient(135deg,#f9d423,#f1c40f);
+  font-weight:700;
+}
+.secondary{background:#2b2b2b;color:#fff}
+.toggle{display:flex;gap:12px;margin-top:12px}
+.toggle button{flex:1;background:#2b2b2b;color:#fff}
+.toggle button.active{background:var(--accent);color:#000}
+.nav{display:flex;gap:12px;margin-top:16px}
+.nav button{flex:1}
+.list{line-height:1.7;white-space:pre-line;margin-top:10px}
+.value{
+  margin-top:14px;
+  padding:14px;
+  background:#f5f5f5;
+  color:#000;
+  border-radius:14px;
+  text-align:center;
+}
+.hidden{display:none}
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  display:none;
+  align-items:flex-end;
+  z-index:1000;
+}
+.modal.active{display:flex}
+.sheet{
+  width:100%;
+  background:#fff;
+  border-radius:22px 22px 0 0;
+  padding:20px;
+  color:#000;
+}
+.option{padding:16px;font-size:18px;border-bottom:1px solid #ddd}
+.option:last-child{border-bottom:none}
+.version,.credit{
+  position:fixed;
+  bottom:10px;
+  font-size:12px;
+  color:#777;
+  opacity:.6;
+}
+.version{right:14px}
+.credit{left:14px}
+</style>
+</head>
+
+<body>
+
+<h1>🍺🍷 Alkohol-omregner</h1>
+
+<div class="section step active" id="step1">
+  <button id="btnPick">Velg drikke</button>
+  <div class="value" id="chosenDrink">🍺 Øl</div>
+  <button id="btnNext1">➕ Legg til</button>
+</div>
+
+<div class="section step" id="step2">
+  <h2>Velg enhet</h2>
+  <div class="toggle">
+    <button id="btnGlass" class="active">Glass</button>
+    <button id="btnBottle">Flaske (75 cl)</button>
+  </div>
+  <div class="nav">
+    <button class="secondary" id="back1">Tilbake</button>
+    <button id="next2">Neste</button>
+  </div>
+</div>
+
+<div class="section step" id="step3">
+  <h2>Antall</h2>
+  <input type="number" id="amount" value="1" min="1">
+  <h2>Glass-størrelse (cl)</h2>
+  <input type="number" id="customSize">
+  <h2>Alkohol %</h2>
+  <input type="number" id="customPercent" step="0.1">
+  <div class="nav">
+    <button class="secondary" id="back2">Tilbake</button>
+    <button id="addDrink">Legg til</button>
+  </div>
+</div>
+
+<div class="section step" id="step4">
+  <h2>Oversikt</h2>
+  <div id="summary" class="list"></div>
+  <div class="nav">
+    <button class="secondary" id="addMore">➕ Legg til flere</button>
+    <button id="goConvert">🔁 Regn om</button>
+  </div>
+</div>
+
+<div class="section step" id="step5">
+  <h2>Resultat</h2>
+  <div id="result" class="list"></div>
+  <button class="secondary" id="restart">🔄 Start på nytt</button>
+</div>
+
+<div class="modal" id="drinkPicker">
+  <div class="sheet">
+    <div class="option" data-type="Øl">🍺 Øl</div>
+    <div class="option" data-type="Cider">🍎 Cider</div>
+    <div class="option" data-type="Vin">🍷 Vin</div>
+    <div class="option" data-type="Musserende">🍾 Musserende</div>
+    <div class="option" data-type="Drink">🍸 Drink</div>
+  </div>
+</div>
+
+<div class="version">v1.7</div>
+<div class="credit">Laget av RBP</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+const data={
+  Øl:{size:50,percent:4.5},
+  Cider:{size:50,percent:4.7},
+  Vin:{size:12,percent:13},
+  Musserende:{size:12,percent:11},
+  Drink:{size:4,percent:40}
+};
+
+let drinks=[];
+let currentType="Øl";
+let unit="glass";
+
+const qs=id=>document.getElementById(id);
+const steps=document.querySelectorAll(".step");
+const picker=qs("drinkPicker");
+
+function showStep(n){
+  steps.forEach(s=>s.classList.remove("active"));
+  qs("step"+n).classList.add("active");
+}
+
+qs("btnPick").onclick=()=>picker.classList.add("active");
+picker.onclick=e=>{ if(e.target===picker) picker.classList.remove("active"); };
+
+document.querySelectorAll(".option").forEach(o=>{
+  o.onclick=()=>{
+    currentType=o.dataset.type;
+    qs("chosenDrink").innerText=o.innerText;
+    picker.classList.remove("active");
+  };
+});
+
+qs("btnGlass").onclick=()=>{unit="glass";qs("btnGlass").classList.add("active");qs("btnBottle").classList.remove("active");};
+qs("btnBottle").onclick=()=>{unit="bottle";qs("btnBottle").classList.add("active");qs("btnGlass").classList.remove("active");};
+
+qs("btnNext1").onclick=()=>showStep(2);
+qs("next2").onclick=()=>showStep(3);
+qs("back1").onclick=()=>showStep(1);
+qs("back2").onclick=()=>showStep(2);
+qs("addMore").onclick=()=>showStep(1);
+
+qs("addDrink").onclick=()=>{
+  const a=+qs("amount").value;
+  const size=unit==="bottle"?75:(+qs("customSize").value||data[currentType].size);
+  const percent=+qs("customPercent").value||data[currentType].percent;
+  drinks.push({
+    label:`${a} ${unit==="bottle"?"flasker":"glass"} ${currentType.toLowerCase()}`,
+    alcohol:size*a*(percent/100)
+  });
+  qs("summary").innerText=drinks.map(d=>"• "+d.label).join("\n");
+  showStep(4);
+};
+
+qs("goConvert").onclick=()=>{
+  const total=drinks.reduce((s,d)=>s+d.alcohol,0);
+  const ref=data["Øl"];
+  qs("result").innerText=`${qs("summary").innerText}\n\nTilsvarer ca ${(total/(ref.size*(ref.percent/100))).toFixed(2)} øl`;
+  showStep(5);
+};
+
+qs("restart").onclick=()=>{
+  drinks=[];
+  qs("summary").innerText="";
+  qs("result").innerText="";
+  showStep(1);
+};
+
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js");
+}
+
+});
+</script>
+
+</body>
+</html>
